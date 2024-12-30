@@ -1,0 +1,38 @@
+{
+  "name": "discord-ipc",
+  "version": "0.1.0",
+  "description": "A library to connect to a locally running Discord client over IPC. Based on the discord-rpc library",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "yarn build:watch",
+    "build": "rimraf dist && yarn build:main",
+    "build:main": "tsc -p tsconfig.build.json",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
+    "build:test": "tsc -p tsconfig.build.json --noEmit",
+    "prettier": "prettier ./.prettierrc.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thedist/discord-ipc.git"
+  },
+  "eslintIgnore": [
+    "/tests/*.test.ts"
+  ],
+  "keywords": [
+    "discord"
+  ],
+  "author": "Jeff Martin <dist@dist.dev>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/thedist/discord-ipc/issues"
+  },
+  "homepage": "https://github.com/thedist/discord-ipc#readme",
+  "packageManager": "yarn@1.22.19+sha512.ff4579ab459bb25aa7c0ff75b62acebe576f6084b36aa842971cf250a5d8c6cd3bc9420b22ce63c7f93a0857bc6ef29291db39c3e7a23aab5adfd5a4dd6c5d71",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "prettier": "^3.4.2",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.2"
+  }
+}
