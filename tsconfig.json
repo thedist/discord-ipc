@@ -20,7 +20,7 @@
     "paths": {
       "*": ["node_modules/*", "types/*"]
     },
-    "declaration": false,
+    "declaration": true,
     "importHelpers": false,
     "listFiles": false,
     "traceResolution": false,
