@@ -1,5 +1,5 @@
 {
-  "name": "discord-ipc",
+  "name": "@distdev/discord-ipc",
   "version": "0.1.0",
   "description": "A library to connect to a locally running Discord client over IPC. Based on the discord-rpc library",
   "main": "dist/index.js",
@@ -15,9 +15,6 @@
     "type": "git",
     "url": "git+https://github.com/thedist/discord-ipc.git"
   },
-  "eslintIgnore": [
-    "/tests/*.test.ts"
-  ],
   "keywords": [
     "discord"
   ],
@@ -28,7 +25,6 @@
   },
   "homepage": "https://github.com/thedist/discord-ipc#readme",
   "packageManager": "yarn@1.22.19+sha512.ff4579ab459bb25aa7c0ff75b62acebe576f6084b36aa842971cf250a5d8c6cd3bc9420b22ce63c7f93a0857bc6ef29291db39c3e7a23aab5adfd5a4dd6c5d71",
-  "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.10.2",
     "prettier": "^3.4.2",
