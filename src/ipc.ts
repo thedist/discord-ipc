@@ -61,7 +61,7 @@ const findEndpoint = async (tries = 0) => {
   }
 }
 
-export const encode = (op: number, data: any) => {
+export const encode = (op: number, data: any): Buffer => {
   data = JSON.stringify(data)
   const len = Buffer.byteLength(data)
   const packet = Buffer.alloc(8 + len)

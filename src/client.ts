@@ -3,8 +3,39 @@ import { IPCTransport } from './ipc'
 import { RPCCommands, RPCEvents, RelationshipTypes } from './constants'
 import { uuid } from './utils'
 
+export interface Activity {
+  state: string
+  details: string
+  assets?: {
+    large_image?: string
+    large_text?: string
+    small_image?: string
+    small_text?: string
+  }
+  buttons?: string[]
+  name: string
+  application_id: string
+  type: number
+  metadata?: {
+    button_urls?: string[]
+  }
+}
 
-interface CertifiedDevice {
+export interface Application {
+  id: string
+  name: string
+  icon: string
+  description: string
+  summary?: string
+  type?: any
+  hook?: boolean
+  terms_of_service_url?: string
+  privacy_policy_url?: string
+  verify_key?: string
+  tags?: string[]
+}
+
+export interface CertifiedDevice {
   type: 'AUDIO_INPUT' | `AUDIO_OUTPUT` | `VIDEO_INPUT`
   uuid: string
   vendor: {
@@ -22,7 +53,42 @@ interface CertifiedDevice {
   hardwareMute: boolean
 }
 
-interface UserVoiceSettings {
+export interface Channel {
+  id: string
+  guild_id: string
+  name: string
+  type: number
+  topic?: string
+  bitrate?: number
+  user_limit?: number
+  position: number
+  voice_states?: any[]
+  messages?: any[]
+}
+
+export interface ChannelsResponse {
+  id: string
+  name: string
+  type: number
+}
+
+export interface Channels {
+  channels: ChannelsResponse[]
+}
+
+export interface Guild {
+  id: string
+  name: string
+  icon_url: string
+  members: []
+  vanity_url_code?: any
+}
+
+export interface Guilds {
+  guilds: Partial<Guild>[]
+}
+
+export interface UserVoiceSettings {
   id: string
   pan?: {
     left: number
@@ -32,24 +98,66 @@ interface UserVoiceSettings {
   mute?: boolean
 }
 
-interface RPCLoginOptions {
+export interface RefreshTokenResponse {
+  token_type: string
+  access_token: string
+  expires_in: number
+  refresh_token: string
+  scope: string
+}
+
+export interface RPCLoginOptions {
   clientId: string
   clientSecret?: string
+  redirectUri?: string
   accessToken?: string
+  refreshToken?: string
   rpcToken?: string
   tokenEndpoint?: string
   scopes?: string[]
 }
 
+export interface Subscription {
+  unsubscribe: () => Promise<unknown>
+}
+
+export interface VoiceSettings {
+  input: {
+    available_devices: CertifiedDevice[]
+    device_id: string
+    volume: number
+  }
+  output: {
+    available_devices: CertifiedDevice[]
+    device_id: string
+    volume: number
+  }
+  mode: {
+    type: string
+    auto_threshold: boolean
+    threshold: number
+    shortcut: any
+    delay: number
+  }
+  automatic_gain_control: boolean
+  echo_cancellation: boolean
+  noise_suppression: boolean
+  qos: boolean
+  silence_warning: boolean
+  deaf: boolean
+  mute: boolean
+}
+
 const subKey = (event: string, args?: any) => {
-  return `${event}${JSON.stringify(args)}`;
+  return `${event}${JSON.stringify(args)}`
 }
 
 export class Client extends EventEmitter {
   options: any
   accessToken: string | null = null
+  refreshToken: string | null = null
   clientId: string | null = null
-  application: any = null
+  application: Application | null = null
   user: any | null = null
   transport: IPCTransport
   endpoint: string = 'https://discord.com/api'
@@ -62,7 +170,7 @@ export class Client extends EventEmitter {
 
     this.options = options
     this.transport = new IPCTransport(this)
-    this.transport.on('message', this._onRpcMessage.bind(this));
+    this.transport.on('message', this._onRpcMessage.bind(this))
   }
 
   async fetch(method: string, path: string, { data, query }: any = {}): Promise<any> {
@@ -70,10 +178,10 @@ export class Client extends EventEmitter {
       method,
       body: data,
       headers: {
-        Authorization: `Bearer ${this.accessToken}`,
+        Authorization: `Bearer ${this.accessToken}`
       }
     }).then(async (res) => {
-      const body = await res.json();
+      const body = await res.json()
 
       if (!res.ok) {
         const err: any = new Error(res.status.toString())
@@ -90,13 +198,13 @@ export class Client extends EventEmitter {
    */
   connect(clientId: string): undefined | Promise<Client> {
     if (this._connectPromise) {
-      return this._connectPromise;
+      return this._connectPromise
     }
 
     this._connectPromise = new Promise((resolve, reject) => {
       this.clientId = clientId
 
-      const timeout = setTimeout(() => reject(new Error('RPC_CONNECTION_TIMEOUT')), 10e3);
+      const timeout = setTimeout(() => reject(new Error('RPC_CONNECTION_TIMEOUT')), 10e3)
       timeout.unref()
 
       this.once('connected', () => {
@@ -127,19 +235,35 @@ export class Client extends EventEmitter {
    * @returns {Promise<RPCClient>}
    */
   async login(options: RPCLoginOptions) {
-    let { clientId, accessToken } = options
-    await this.connect(clientId)
+    await this.connect(options.clientId)
 
     if (!options.scopes) {
       this.emit('ready')
       return this
     }
 
-    if (!accessToken) {
-      accessToken = await this.authorize(options) as string
+    if (options.refreshToken) {
+      const auth = await this.refreshOAuthToken(options)
+      if (auth !== null) {
+        options.accessToken = auth.access_token
+        options.refreshToken = auth.refresh_token
+        this.accessToken = auth.access_token
+        this.refreshToken = auth.refresh_token
+      } else {
+        options.accessToken = undefined
+        options.refreshToken = undefined
+      }
     }
 
-    return this.authenticate(accessToken)
+    if (!options.accessToken || !options.refreshToken) {
+      let auth = await this.authorize(options)
+      options.accessToken = auth.access_token
+      options.refreshToken = auth.refresh_token
+      this.accessToken = auth.access_token
+      this.refreshToken = auth.refresh_token
+    }
+
+    return this.authenticate(options)
   }
 
   /**
@@ -210,7 +334,7 @@ export class Client extends EventEmitter {
       scopes,
       client_id: this.clientId,
       prompt,
-      rpc_token: rpcToken,
+      rpc_token: rpcToken
     })
 
     const response = await this.fetch('POST', '/oauth2/token', {
@@ -223,7 +347,7 @@ export class Client extends EventEmitter {
       })
     })
 
-    return response.access_token
+    return response
   }
 
   /**
@@ -232,15 +356,36 @@ export class Client extends EventEmitter {
    * @returns {Promise}
    * @private
    */
-  authenticate(accessToken: string) {
-    return this.request('AUTHENTICATE', { access_token: accessToken })
-      .then(({ application, user }: any) => {
-        this.accessToken = accessToken
-        this.application = application
-        this.user = user
-        this.emit('ready')
-        return this
+  authenticate(options: RPCLoginOptions) {
+    return this.request('AUTHENTICATE', { access_token: options.accessToken }).then(({ application, user }: any) => {
+      this.accessToken = options.accessToken as string
+      this.refreshToken = options.refreshToken as string
+      this.application = application
+      this.user = user
+      this.emit('ready')
+      return this
+    })
+  }
+
+  /**
+   * Refresh access tokens
+   * @param {RPCLoginOptions} options
+   * @returns {Promise<RefreshTokenResponse | null>}
+   */
+  refreshOAuthToken(options: RPCLoginOptions): Promise<RefreshTokenResponse | null> {
+    return fetch('https://discord.com/api/v10/oauth2/token', {
+      method: 'POST',
+      body: new URLSearchParams({
+        client_id: options.clientId,
+        client_secret: options.clientSecret || '',
+        grant_type: 'refresh_token',
+        refresh_token: options.refreshToken || ''
       })
+    })
+      .then((res) => res.json())
+      .catch((_err) => {
+        return null
+      }) as Promise<RefreshTokenResponse | null>
   }
 
   /**
@@ -249,17 +394,19 @@ export class Client extends EventEmitter {
    * @param {number} [timeout] Timeout request
    * @returns {Promise<Guild>}
    */
-  getGuild(id: string, timeout?: number) {
-    return this.request(RPCCommands.GET_GUILD, { guild_id: id, timeout })
+  getGuild(id: string, timeout?: number): Promise<Guild> {
+    return this.request(RPCCommands.GET_GUILD, { guild_id: id, timeout }) as Promise<Guild>
   }
 
   /**
    * Fetch all guilds
    * @param {number} [timeout] Timeout request
-   * @returns {Promise<Collection<Snowflake, Guild>>}
+   * @returns {Promise<Partial<Guild>[]>}
    */
-  getGuilds(timeout?: number) {
-    return this.request(RPCCommands.GET_GUILDS, { timeout })
+  async getGuilds(timeout?: number) {
+    const { guilds } = (await this.request(RPCCommands.GET_GUILDS, { timeout })) as Guilds
+
+    return guilds
   }
 
   /**
@@ -268,25 +415,29 @@ export class Client extends EventEmitter {
    * @param {number} [timeout] Timeout request
    * @returns {Promise<Channel>}
    */
-  getChannel(id: string, timeout?: number) {
-    return this.request(RPCCommands.GET_CHANNEL, { channel_id: id, timeout })
+  getChannel(id: string, timeout?: number): Promise<Channel> {
+    return this.request(RPCCommands.GET_CHANNEL, { channel_id: id, timeout }) as Promise<Channel>
   }
 
   /**
    * Get all channels
    * @param {Snowflake} [id] Guild ID
    * @param {number} [timeout] Timeout request
-   * @returns {Promise<Collection<Snowflake, Channel>>}
+   * @returns {Promise<ChannelsResponse[]>}
    */
-  async getChannels(id?: string, timeout?: number) {
-    const { channels }: any = await this.request(RPCCommands.GET_CHANNELS, {
-      timeout,
-      guild_id: id,
-    })
+  async getChannels(id?: string, timeout?: number): Promise<ChannelsResponse[]> {
+    const { channels } = (await this.request(RPCCommands.GET_CHANNELS, { guild_id: id, timeout })) as Channels
 
     return channels
   }
 
+  /**
+   * Get voice channel currently connected to
+   * @returns {Promise<Channel | null>}
+   */
+  async getSelectedVoiceChannel(): Promise<Channel | null> {
+    return this.request(RPCCommands.GET_SELECTED_VOICE_CHANNEL) as Promise<Channel | null>
+  }
 
   /**
    * Tell discord which devices are certified
@@ -313,15 +464,13 @@ export class Client extends EventEmitter {
    * Set the voice settings for a user, by id
    * @param {Snowflake} id ID of the user to set
    * @param {UserVoiceSettings} settings Settings
-   * @returns {Promise}
+   * @returns {Promise<UserVoiceSettings>}
    */
-  setUserVoiceSettings(id: string, settings: UserVoiceSettings) {
+  setUserVoiceSettings(id: string, settings: Partial<UserVoiceSettings>): Promise<UserVoiceSettings> {
     return this.request(RPCCommands.SET_USER_VOICE_SETTINGS, {
       user_id: id,
-      pan: settings.pan,
-      mute: settings.mute,
-      volume: settings.volume
-    })
+      ...settings
+    }) as Promise<UserVoiceSettings>
   }
 
   /**
@@ -331,10 +480,10 @@ export class Client extends EventEmitter {
    * @param {number} [options.timeout] Timeout for the command
    * @param {boolean} [options.force] Force this move. This should only be done if you
    * have explicit permission from the user.
-   * @returns {Promise}
+   * @returns {Promise<Channel>}
    */
-  selectVoiceChannel(id: string, { timeout, force = false }: any = {}) {
-    return this.request(RPCCommands.SELECT_VOICE_CHANNEL, { channel_id: id, timeout, force });
+  selectVoiceChannel(id: string | null, { timeout, force = false }: any = {}): Promise<Channel> {
+    return this.request(RPCCommands.SELECT_VOICE_CHANNEL, { channel_id: id, timeout, force }) as Promise<Channel>
   }
 
   /**
@@ -343,77 +492,28 @@ export class Client extends EventEmitter {
    * @param {Object} [options] Options
    * @param {number} [options.timeout] Timeout for the command
    * have explicit permission from the user.
-   * @returns {Promise}
+   * @returns {Promise<Channel>}
    */
-  selectTextChannel(id: string, { timeout }: any = {}) {
-    return this.request(RPCCommands.SELECT_TEXT_CHANNEL, { channel_id: id, timeout });
+  selectTextChannel(id: string, { timeout }: any = {}): Promise<Channel> {
+    return this.request(RPCCommands.SELECT_TEXT_CHANNEL, { channel_id: id, timeout }) as Promise<Channel>
   }
 
   /**
    * Get current voice settings
-   * @returns {Promise}
+   * @returns {Promise<VoiceSettings>}
    */
-  getVoiceSettings() {
-    return this.request(RPCCommands.GET_VOICE_SETTINGS)
-      .then((settings: any) => ({
-        automaticGainControl: settings.automatic_gain_control,
-        echoCancellation: settings.echo_cancellation,
-        noiseSuppression: settings.noise_suppression,
-        qos: settings.qos,
-        silenceWarning: settings.silence_warning,
-        deaf: settings.deaf,
-        mute: settings.mute,
-        input: {
-          availableDevices: settings.input.available_devices,
-          device: settings.input.device_id,
-          volume: settings.input.volume,
-        },
-        output: {
-          availableDevices: settings.output.available_devices,
-          device: settings.output.device_id,
-          volume: settings.output.volume,
-        },
-        mode: {
-          type: settings.mode.type,
-          autoThreshold: settings.mode.auto_threshold,
-          threshold: settings.mode.threshold,
-          shortcut: settings.mode.shortcut,
-          delay: settings.mode.delay,
-        },
-      }));
+  getVoiceSettings(): Promise<VoiceSettings> {
+    return this.request(RPCCommands.GET_VOICE_SETTINGS) as Promise<VoiceSettings>
   }
 
   /**
    * Set current voice settings, overriding the current settings until this session disconnects.
    * This also locks the settings for any other rpc sessions which may be connected.
-   * @param {Object} args Settings
-   * @returns {Promise}
+   * @param {Partial<VoiceSettings>} args Settings
+   * @returns {Promise<VoiceSettings>}
    */
-  setVoiceSettings(args: any) {
-    return this.request(RPCCommands.SET_VOICE_SETTINGS, {
-      automatic_gain_control: args.automaticGainControl,
-      echo_cancellation: args.echoCancellation,
-      noise_suppression: args.noiseSuppression,
-      qos: args.qos,
-      silence_warning: args.silenceWarning,
-      deaf: args.deaf,
-      mute: args.mute,
-      input: args.input ? {
-        device_id: args.input.device,
-        volume: args.input.volume,
-      } : undefined,
-      output: args.output ? {
-        device_id: args.output.device,
-        volume: args.output.volume,
-      } : undefined,
-      mode: args.mode ? {
-        type: args.mode.type,
-        auto_threshold: args.mode.autoThreshold,
-        threshold: args.mode.threshold,
-        shortcut: args.mode.shortcut,
-        delay: args.mode.delay,
-      } : undefined,
-    });
+  setVoiceSettings(args: Partial<VoiceSettings>): Promise<VoiceSettings> {
+    return this.request(RPCCommands.SET_VOICE_SETTINGS, args) as Promise<VoiceSettings>
   }
 
   /**
@@ -425,28 +525,27 @@ export class Client extends EventEmitter {
    * @returns {Promise<Function>}
    */
   captureShortcut(callback: any) {
-    const subid = subKey(RPCEvents.CAPTURE_SHORTCUT_CHANGE);
+    const subid = subKey(RPCEvents.CAPTURE_SHORTCUT_CHANGE)
 
     const stop = () => {
-      this._subscriptions.delete(subid);
-      return this.request(RPCCommands.CAPTURE_SHORTCUT, { action: 'STOP' });
+      this._subscriptions.delete(subid)
+      return this.request(RPCCommands.CAPTURE_SHORTCUT, { action: 'STOP' })
     }
 
     this._subscriptions.set(subid, ({ shortcut }: any) => {
-      callback(shortcut, stop);
+      callback(shortcut, stop)
     })
 
-    return this.request(RPCCommands.CAPTURE_SHORTCUT, { action: 'START' })
-      .then(() => stop)
+    return this.request(RPCCommands.CAPTURE_SHORTCUT, { action: 'START' }).then(() => stop)
   }
 
   /**
    * Sets the presence for the logged in user.
    * @param {object} args The rich presence to pass.
    * @param {number} [pid] The application's process ID. Defaults to the executing process' PID.
-   * @returns {Promise}
+   * @returns {Promise<Activity>}
    */
-  setActivity(args: any = {}) {
+  setActivity(args: any = {}): Promise<Activity> {
     let timestamps: any
     let assets: any
     let party: any
@@ -495,7 +594,7 @@ export class Client extends EventEmitter {
         match: args.matchSecret,
         join: args.joinSecret,
         spectate: args.spectateSecret
-      };
+      }
     }
 
     return this.request(RPCCommands.SET_ACTIVITY, {
@@ -510,17 +609,17 @@ export class Client extends EventEmitter {
         buttons: args.buttons,
         instance: !!args.instance
       }
-    })
+    }) as Promise<Activity>
   }
 
   /**
    * Clears the currently set presence, if any. This will hide the "Playing X" message
    * displayed below the user's name.
    * @param {number} [pid] The application's process ID. Defaults to the executing process' PID.
-   * @returns {Promise}
+   * @returns {Promise<null>}
    */
-  clearActivity() {
-    return this.request(RPCCommands.SET_ACTIVITY, { pid: process.pid })
+  clearActivity(): Promise<null> {
+    return this.request(RPCCommands.SET_ACTIVITY, { pid: process.pid }) as Promise<null>
   }
 
   /**
@@ -541,8 +640,8 @@ export class Client extends EventEmitter {
    */
   sendJoinRequest(user: any) {
     return this.request(RPCCommands.SEND_ACTIVITY_JOIN_REQUEST, {
-      user_id: user.id || user,
-    });
+      user_id: user.id || user
+    })
   }
 
   /**
@@ -552,8 +651,8 @@ export class Client extends EventEmitter {
    */
   closeJoinRequest(user: any) {
     return this.request(RPCCommands.CLOSE_ACTIVITY_JOIN_REQUEST, {
-      user_id: user.id || user,
-    });
+      user_id: user.id || user
+    })
   }
 
   createLobby(type: any, capacity: any, metadata: any) {
@@ -575,29 +674,19 @@ export class Client extends EventEmitter {
   }
 
   deleteLobby(lobby: any) {
-    return this.request(RPCCommands.DELETE_LOBBY, {
-      id: lobby.id || lobby
-    })
+    return this.request(RPCCommands.DELETE_LOBBY, { id: lobby.id || lobby })
   }
 
   connectToLobby(id: any, secret: any) {
-    return this.request(RPCCommands.CONNECT_TO_LOBBY, {
-      id,
-      secret
-    })
+    return this.request(RPCCommands.CONNECT_TO_LOBBY, { id, secret })
   }
 
   sendToLobby(lobby: any, data: any) {
-    return this.request(RPCCommands.SEND_TO_LOBBY, {
-      id: lobby.id || lobby,
-      data
-    })
+    return this.request(RPCCommands.SEND_TO_LOBBY, { id: lobby.id || lobby, data })
   }
 
   disconnectFromLobby(lobby: any) {
-    return this.request(RPCCommands.DISCONNECT_FROM_LOBBY, {
-      id: lobby.id || lobby
-    })
+    return this.request(RPCCommands.DISCONNECT_FROM_LOBBY, { id: lobby.id || lobby })
   }
 
   updateLobbyMember(lobby: any, user: any, metadata: any) {
@@ -611,22 +700,21 @@ export class Client extends EventEmitter {
   getRelationships() {
     const types = Object.keys(RelationshipTypes)
 
-    return this.request(RPCCommands.GET_RELATIONSHIPS)
-      .then((res: any) => {
-        return res.relationships.map((relationship: any) => ({
-          ...relationship,
-          type: types[relationship.type],
-        }))
-      })
+    return this.request(RPCCommands.GET_RELATIONSHIPS).then((res: any) => {
+      return res.relationships.map((relationship: any) => ({
+        ...relationship,
+        type: types[relationship.type]
+      }))
+    })
   }
 
   /**
    * Subscribe to an event
    * @param {string} event Name of event e.g. `MESSAGE_CREATE`
    * @param {Object} [args] Args for event e.g. `{ channel_id: '1234' }`
-   * @returns {Promise<Object>}
+   * @returns {Promise<Subscription>}
    */
-  async subscribe(event: string, args?: any) {
+  async subscribe(event: string, args?: any): Promise<Subscription> {
     await this.request(RPCCommands.SUBSCRIBE, args, event)
 
     return {
