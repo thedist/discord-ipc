@@ -1,6 +1,6 @@
 {
   "name": "@distdev/discord-ipc",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A library to connect to a locally running Discord client over IPC. Based on the discord-rpc library",
   "main": "dist/index.js",
   "scripts": {

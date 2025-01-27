@@ -148,6 +148,34 @@ export interface VoiceSettings {
   mute: boolean
 }
 
+export interface VoiceState {
+  nick: string
+  mute: boolean
+  volume: number
+  pan: {
+    left: number
+    right: number
+  }
+  voice_state: {
+    mute: boolean
+    deaf: boolean
+    self_mute: boolean
+    self_deaf: boolean
+    suppress: boolean
+  }
+  user: {
+    id: string
+    username: string
+    discriminator: string
+    global_name: string
+    avatar: string
+    avatar_decoration_data?: any
+    bot: boolean
+    flags: number
+    premium_type: number
+  }
+}
+
 const subKey = (event: string, args?: any) => {
   return `${event}${JSON.stringify(args)}`
 }
@@ -726,6 +754,7 @@ export class Client extends EventEmitter {
    * Destroy the client
    */
   async destroy() {
+    this._expecting.clear()
     await this.transport.close()
   }
 }
